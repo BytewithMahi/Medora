@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, QrCode, Search, ShieldCheck, ShieldAlert, AlertOctagon, Activity, CheckCircle2, MapPin, Factory, Truck, Store, Flag } from 'lucide-react';
 import { Canvas } from '@react-three/fiber';
 import FloatingMedicine3D from './FloatingMedicine3D';
+import { supabase } from '../../lib/supabase';
 
 type Status = 'verified' | 'pending' | 'suspicious' | null;
 
@@ -11,22 +12,59 @@ export default function CustomerDashboard() {
     const [isSearching, setIsSearching] = useState(false);
     const [resultStatus, setResultStatus] = useState<Status>(null);
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [medicineData, setMedicineData] = useState<any>(null);
+    const [ledgerEvents, setLedgerEvents] = useState<any[]>([]);
 
-    const handleSearch = (e: React.FormEvent) => {
+    const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!scanInput) return;
 
         setIsSearching(true);
         setResultStatus(null);
+        setMedicineData(null);
+        setLedgerEvents([]);
 
-        setTimeout(() => {
+        try {
+            const { data: medData, error: medError } = await supabase
+                .from('medicines')
+                .select('*')
+                .eq('batch_no', scanInput)
+                .single();
+
+            if (medError || !medData) {
+                // Not found
+                await supabase.from('medicines').insert({
+                    name: 'Unknown Medicine',
+                    batch_no: scanInput,
+                    status: 'suspicious'
+                });
+                setResultStatus('suspicious');
+            } else if (medData.status === 'suspicious') {
+                setMedicineData(medData);
+                setResultStatus('suspicious');
+            } else {
+                setMedicineData(medData);
+                const { data: evData } = await supabase
+                    .from('ledger_events')
+                    .select('*')
+                    .eq('medicine_id', medData.id)
+                    .order('created_at', { ascending: true });
+                
+                const events = evData || [];
+                setLedgerEvents(events);
+                
+                const hasRetailer = events.some((e: any) => e.role === 'Retailer Verification');
+                const hasDistributor = events.some((e: any) => e.role === 'Distributor Verification');
+                
+                if (hasRetailer) setResultStatus('verified');
+                else if (hasDistributor || events.length > 0) setResultStatus('pending');
+                else setResultStatus('pending');
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
             setIsSearching(false);
-            // Mock logic: if it ends with 'X', it's suspicious. If it starts with 'P', it's pending. Else verified.
-            const lower = scanInput.toLowerCase();
-            if (lower.endsWith('x')) setResultStatus('suspicious');
-            else if (lower.startsWith('p')) setResultStatus('pending');
-            else setResultStatus('verified');
-        }, 2000);
+        }
     };
 
     const getStatusConfig = () => {
@@ -150,29 +188,29 @@ export default function CustomerDashboard() {
                                 <div className="w-full bg-black/40 rounded-2xl p-6 text-left border border-white/5">
                                     <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4 border-b border-white/10 pb-2">Registered Details</h4>
 
-                                    {resultStatus !== 'suspicious' ? (
+                                    {resultStatus !== 'suspicious' && medicineData ? (
                                         <div className="space-y-3">
                                             <div className="flex justify-between">
                                                 <span className="text-white/60">Medicine Name</span>
-                                                <span className="text-white font-semibold">Vax-Pro-2</span>
+                                                <span className="text-white font-semibold">{medicineData.name}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-white/60">Composition</span>
-                                                <span className="text-white font-semibold text-right max-w-[60%] truncate">mRNA, Lipids, Salts</span>
+                                                <span className="text-white font-semibold text-right max-w-[60%] truncate">{medicineData.composition || 'N/A'}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-white/60">Mfg Date</span>
-                                                <span className="text-white font-semibold">12 Oct 2025</span>
+                                                <span className="text-white font-semibold">{medicineData.mfg_date ? new Date(medicineData.mfg_date).toLocaleDateString() : 'N/A'}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-white/60">Expiry Date</span>
-                                                <span className="text-white font-semibold">12 Oct 2027</span>
+                                                <span className="text-white font-semibold">{medicineData.expiry_date ? new Date(medicineData.expiry_date).toLocaleDateString() : 'N/A'}</span>
                                             </div>
                                         </div>
                                     ) : (
                                         <div className="text-center py-4">
-                                            <p className="text-rose-400 font-semibold">No verifiable data found for '{scanInput}'.</p>
-                                            <p className="text-sm text-white/50 mt-2">Do not consume this product.</p>
+                                            <p className="text-rose-400 font-semibold text-xl">No Records found!</p>
+                                            <p className="text-sm text-white/50 mt-2">This batch has been flagged as suspicious. Do not consume this product.</p>
                                         </div>
                                     )}
                                 </div>
@@ -197,58 +235,73 @@ export default function CustomerDashboard() {
                                     <div className={`absolute top-4 bottom-4 left-[1.15rem] w-0.5 ${resultStatus === 'suspicious' ? 'bg-rose-500/20' : 'bg-emerald-500/20'}`} />
 
                                     {/* Manufacturer Node */}
-                                    <div className="relative pb-8">
-                                        <div className={`absolute -left-[2.1rem] w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 z-10 ${resultStatus === 'suspicious' ? 'bg-rose-500/20 text-rose-500' : 'bg-emerald-500 text-slate-900 shadow-[0_0_15px_rgba(52,211,153,0.5)]'}`}>
-                                            {resultStatus === 'suspicious' ? <AlertOctagon className="w-4 h-4" /> : <Factory className="w-5 h-5" />}
+                                    {(() => {
+                                        const event = ledgerEvents.find(e => e.role === 'Producer Initialization');
+                                        return (
+                                        <div className="relative pb-8">
+                                            <div className={`absolute -left-[2.1rem] w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 z-10 ${resultStatus === 'suspicious' ? 'bg-rose-500/20 text-rose-500' : 'bg-emerald-500 text-slate-900 shadow-[0_0_15px_rgba(52,211,153,0.5)]'}`}>
+                                                {resultStatus === 'suspicious' ? <AlertOctagon className="w-4 h-4" /> : <Factory className="w-5 h-5" />}
+                                            </div>
+                                            <div>
+                                                <h4 className={`text-lg font-bold ${resultStatus === 'suspicious' ? 'text-white/50' : 'text-emerald-400'}`}>Producer Check</h4>
+                                                {event ? (
+                                                    <>
+                                                        <p className="text-sm text-white/80 mt-1">{event.actor_email || 'Producer'}</p>
+                                                        <p className="text-xs text-white/40 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {new Date(event.created_at).toLocaleString()}</p>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-sm text-white/30 mt-1">{resultStatus === 'suspicious' ? 'Validation Failed' : 'Pending record'}</p>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className={`text-lg font-bold ${resultStatus === 'suspicious' ? 'text-white/50' : 'text-emerald-400'}`}>Producer Check</h4>
-                                            {resultStatus !== 'suspicious' ? (
-                                                <>
-                                                    <p className="text-sm text-white/80 mt-1">BioPharma Corp - Geneva Facility</p>
-                                                    <p className="text-xs text-white/40 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Hash: 0x8f2a...9b1c</p>
-                                                </>
-                                            ) : (
-                                                <p className="text-sm text-rose-400/80 mt-1">Validation Failed</p>
-                                            )}
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
 
                                     {/* Distributor Node */}
-                                    <div className="relative pb-8">
-                                        <div className={`absolute -left-[2.1rem] w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 z-10 ${resultStatus === 'verified' || resultStatus === 'pending' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800 text-slate-500'}`}>
-                                            <Truck className="w-5 h-5" />
+                                    {(() => {
+                                        const event = ledgerEvents.find(e => e.role === 'Distributor Verification');
+                                        return (
+                                        <div className="relative pb-8">
+                                            <div className={`absolute -left-[2.1rem] w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 z-10 ${event ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800 text-slate-500'}`}>
+                                                <Truck className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h4 className={`text-lg font-bold ${event ? 'text-emerald-400' : 'text-white/30'}`}>Logistics Verified</h4>
+                                                {event ? (
+                                                    <>
+                                                        <p className="text-sm text-white/80 mt-1">{event.actor_email || 'Distributor'}</p>
+                                                        <p className="text-xs text-white/40 mt-1 flex items-center gap-1"><Activity className="w-3 h-3" /> {new Date(event.created_at).toLocaleString()}</p>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-sm text-white/30 mt-1">Pending scan</p>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className={`text-lg font-bold ${resultStatus === 'verified' || resultStatus === 'pending' ? 'text-emerald-400' : 'text-white/30'}`}>Logistics Verified</h4>
-                                            {resultStatus === 'verified' || resultStatus === 'pending' ? (
-                                                <>
-                                                    <p className="text-sm text-white/80 mt-1">Global Logistics LLC - Hub 4</p>
-                                                    <p className="text-xs text-white/40 mt-1 flex items-center gap-1"><Activity className="w-3 h-3" /> Temp: Maintained (-80°C)</p>
-                                                </>
-                                            ) : (
-                                                <p className="text-sm text-white/30 mt-1">Pending scan</p>
-                                            )}
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
 
                                     {/* Retailer Node */}
-                                    <div className="relative">
-                                        <div className={`absolute -left-[2.1rem] w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 z-10 ${resultStatus === 'verified' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800 text-slate-500'}`}>
-                                            <Store className="w-5 h-5" />
+                                    {(() => {
+                                        const event = ledgerEvents.find(e => e.role === 'Retailer Verification');
+                                        return (
+                                        <div className="relative">
+                                            <div className={`absolute -left-[2.1rem] w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 z-10 ${event ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800 text-slate-500'}`}>
+                                                <Store className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h4 className={`text-lg font-bold ${event ? 'text-emerald-400' : 'text-white/30'}`}>Pharmacy Arrival</h4>
+                                                {event ? (
+                                                    <>
+                                                        <p className="text-sm text-white/80 mt-1">{event.actor_email || 'Retailer'}</p>
+                                                        <p className="text-xs text-white/40 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> {new Date(event.created_at).toLocaleString()}</p>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-sm text-white/30 mt-1">Pending arrival</p>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className={`text-lg font-bold ${resultStatus === 'verified' ? 'text-emerald-400' : 'text-white/30'}`}>Pharmacy Arrival</h4>
-                                            {resultStatus === 'verified' ? (
-                                                <>
-                                                    <p className="text-sm text-white/80 mt-1">City Health Pharmacy - NY</p>
-                                                    <p className="text-xs text-white/40 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Authenticated at Point of Sale</p>
-                                                </>
-                                            ) : (
-                                                <p className="text-sm text-white/30 mt-1">Pending arrival</p>
-                                            )}
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
 
                                 </div>
                             </div>
