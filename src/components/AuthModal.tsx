@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Factory, Truck, Store, User as UserIcon, ChevronLeft, ShieldCheck, Mail, Lock, Fingerprint, Activity } from 'lucide-react';
-
+import { X, Factory, Truck, Store, User as UserIcon, ChevronLeft, ShieldCheck, Mail, Lock, Fingerprint, Activity, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import emailjs from '@emailjs/browser';
 
 interface AuthModalProps {
     isOpen: boolean;
@@ -20,15 +21,27 @@ const roles = [
 ];
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onLogin }) => {
-    const [currentMode, setCurrentMode] = useState<'login' | 'register'>(initialMode);
+    const [currentMode, setCurrentMode] = useState<'login' | 'register' | 'forgot'>(initialMode);
     const [selectedRole, setSelectedRole] = useState<Role>(null);
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [passkey, setPasskey] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
     // Reset state when modal opens
     useEffect(() => {
         if (isOpen) {
             setCurrentMode(initialMode);
             setSelectedRole(null);
+            setName('');
+            setEmail('');
+            setPasskey('');
+            setError('');
+            setSuccess('');
         }
     }, [isOpen, initialMode]);
 
@@ -128,7 +141,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onL
                                         transition={{ delay: 0.4 }}
                                         className="text-white/60 text-lg md:text-xl max-w-2xl mx-auto"
                                     >
-                                        Join the decentralized healthcare supply chain. Choose your participant type to {currentMode === 'login' ? 'access your dashboard.' : 'create an identity.'}
+                                        Join the decentralized healthcare supply chain. Choose your participant type to {currentMode === 'login' ? 'access your dashboard.' : currentMode === 'forgot' ? 'recover your passkey.' : 'create an identity.'}
                                     </motion.p>
                                 </div>
 
@@ -218,7 +231,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onL
 
                                         <h2 className="text-4xl font-black text-white mb-4">
                                             {selectedRole} <br />
-                                            <span className="text-primary text-3xl opacity-80">{currentMode === 'login' ? 'Access' : 'Registration'}</span>
+                                            <span className="text-primary text-3xl opacity-80">{currentMode === 'forgot' ? 'Recovery' : currentMode === 'login' ? 'Access' : 'Registration'}</span>
                                         </h2>
 
                                         <p className="text-white/60 leading-relaxed mb-8">
@@ -248,10 +261,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onL
                                     </button>
 
                                     <h3 className="text-2xl font-bold text-white mb-8">
-                                        {currentMode === 'login' ? `Welcome back, ${selectedRole}.` : `Initialize ${selectedRole} Node.`}
+                                        {currentMode === 'forgot' ? `Recover ${selectedRole} Passkey.` : currentMode === 'login' ? `Welcome back, ${selectedRole}.` : `Initialize ${selectedRole} Node.`}
                                     </h3>
 
-                                    <form className="space-y-6 w-full max-w-md mx-auto md:mx-0" onSubmit={(e) => e.preventDefault()}>
+                                    {error && (
+                                        <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3">
+                                            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                                            <p className="text-sm text-red-200">{error}</p>
+                                        </div>
+                                    )}
+
+                                    {success && (
+                                        <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
+                                            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                                            <p className="text-sm text-emerald-200">{success}</p>
+                                        </div>
+                                    )}
+
+                                    <form className="space-y-6 w-full max-w-md mx-auto md:mx-0" onSubmit={(e) => { e.preventDefault(); }}>
 
                                         {currentMode === 'register' && (
                                             <div className="space-y-2 relative group">
@@ -260,6 +287,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onL
                                                     <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40 group-focus-within:text-primary transition-colors" />
                                                     <input
                                                         type="text"
+                                                        value={name}
+                                                        onChange={(e) => setName(e.target.value)}
                                                         className="w-full bg-black/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-medium"
                                                         placeholder="Enter display name"
                                                     />
@@ -273,40 +302,145 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onL
                                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40 group-focus-within:text-primary transition-colors" />
                                                 <input
                                                     type="email"
+                                                    value={email}
+                                                    onChange={(e) => setEmail(e.target.value)}
                                                     className="w-full bg-black/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-medium"
                                                     placeholder={`${selectedRole?.toLowerCase()}@medchain.net`}
                                                 />
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2 relative group">
-                                            <label className="text-xs font-bold text-white/70 uppercase tracking-wider pl-1">Crypto Passkey</label>
-                                            <div className="relative">
-                                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40 group-focus-within:text-primary transition-colors" />
-                                                <input
-                                                    type="password"
-                                                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-medium"
-                                                    placeholder="••••••••••••"
-                                                />
+                                        {currentMode !== 'forgot' && (
+                                            <div className="space-y-2 relative group">
+                                                <label className="text-xs font-bold text-white/70 uppercase tracking-wider pl-1">Crypto Passkey</label>
+                                                <div className="relative">
+                                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40 group-focus-within:text-primary transition-colors" />
+                                                    <input
+                                                        type="password"
+                                                        value={passkey}
+                                                        onChange={(e) => setPasskey(e.target.value)}
+                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-medium"
+                                                        placeholder="••••••••••••"
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
 
                                         {currentMode === 'login' && (
                                             <div className="flex justify-end">
-                                                <a href="#" className="text-sm font-semibold text-primary/80 hover:text-primary transition-colors">Forgot Passkey?</a>
+                                                <a href="#" onClick={(e) => { e.preventDefault(); setCurrentMode('forgot'); setError(''); setSuccess(''); }} className="text-sm font-semibold text-primary/80 hover:text-primary transition-colors">Forgot Passkey?</a>
+                                            </div>
+                                        )}
+                                        {currentMode === 'forgot' && (
+                                            <div className="flex justify-end">
+                                                <a href="#" onClick={(e) => { e.preventDefault(); setCurrentMode('login'); setError(''); setSuccess(''); }} className="text-sm font-semibold text-primary/80 hover:text-primary transition-colors">Back to Login</a>
                                             </div>
                                         )}
 
                                         <button
-                                            onClick={() => {
-                                                if (onLogin && selectedRole) onLogin(selectedRole);
-                                                onClose();
+                                            onClick={async () => {
+                                                if (!selectedRole || !email || (currentMode !== 'forgot' && !passkey)) {
+                                                    setError("Please fill in all required fields.");
+                                                    return;
+                                                }
+                                                if (currentMode === 'register' && !name) {
+                                                    setError("Please provide a name.");
+                                                    return;
+                                                }
+
+                                                setLoading(true);
+                                                setError('');
+                                                setSuccess('');
+
+                                                if (currentMode === 'forgot') {
+                                                    const { data, error: fetchError } = await supabase
+                                                        .from('users')
+                                                        .select('*')
+                                                        .eq('email', email)
+                                                        .eq('role', selectedRole);
+
+                                                    if (fetchError) {
+                                                        setError("An error occurred.");
+                                                    } else if (data && data.length > 0) {
+                                                        const user = data[0];
+                                                        try {
+                                                            // Provide defaults as placeholders. The user must configure these in .env.local
+                                                            await emailjs.send(
+                                                                import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID',
+                                                                import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_TEMPLATE_ID',
+                                                                {
+                                                                    email: email, // Changed from to_email to match your EmailJS screenshot
+                                                                    to_name: user.name || selectedRole,
+                                                                    passkey: user.passkey,
+                                                                },
+                                                                import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY'
+                                                            );
+                                                            setSuccess(`A recovery passkey has been sent to ${email}`);
+                                                        } catch (emailError) {
+                                                            console.error("EmailJS Error:", emailError);
+                                                            setError("Failed to send recovery email. Ensure EmailJS is configured properly.");
+                                                        }
+                                                    } else {
+                                                        setError("No identity found for this email and role.");
+                                                    }
+                                                    setLoading(false);
+                                                    return;
+                                                }
+
+                                                if (currentMode === 'register') {
+                                                    const { error: insertError } = await supabase
+                                                        .from('users')
+                                                        .insert([{ role: selectedRole, name, email, passkey }]);
+
+                                                    if (insertError) {
+                                                        if (insertError.code === '23505') { // unique violation
+                                                            setError("Email already registered.");
+                                                        } else {
+                                                            setError("Registration failed. Please try again.");
+                                                        }
+                                                        setLoading(false);
+                                                        return;
+                                                    }
+
+                                                    // Registration successful, auto-login or switch to login mode?
+                                                    // Auto-login:
+                                                    if (onLogin) onLogin(selectedRole);
+                                                    onClose();
+
+                                                } else {
+                                                    const { data, error: fetchError } = await supabase
+                                                        .from('users')
+                                                        .select('*')
+                                                        .eq('email', email)
+                                                        .eq('passkey', passkey)
+                                                        .eq('role', selectedRole);
+
+                                                    if (fetchError) {
+                                                        setError("An error occurred during login.");
+                                                        setLoading(false);
+                                                        return;
+                                                    }
+
+                                                    if (data && data.length > 0) {
+                                                        // Login successful
+                                                        if (onLogin) onLogin(selectedRole);
+                                                        onClose();
+                                                    } else {
+                                                        setError("details are invalid");
+                                                    }
+                                                }
+                                                setLoading(false);
                                             }}
-                                            className="w-full relative group overflow-hidden rounded-xl bg-white text-black font-bold py-4 mt-4 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]"
+                                            disabled={loading}
+                                            className="w-full relative group overflow-hidden rounded-xl bg-white text-black font-bold py-4 mt-4 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-purple-500/20 translate-y-full group-hover:translate-y-0 transition-transform ease-out" />
                                             <span className="relative z-10 flex items-center justify-center gap-2">
-                                                {currentMode === 'login' ? (
+                                                {loading ? (
+                                                    <Activity className="w-5 h-5 animate-spin" />
+                                                ) : currentMode === 'forgot' ? (
+                                                    <><ShieldCheck className="w-5 h-5" /> Send Recovery Passkey</>
+                                                ) : currentMode === 'login' ? (
                                                     <><Fingerprint className="w-5 h-5" /> Authenticate Handshake</>
                                                 ) : (
                                                     <><ShieldCheck className="w-5 h-5" /> Mint Node Identity</>

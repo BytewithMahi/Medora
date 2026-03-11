@@ -25,6 +25,19 @@ async function initDb() {
     `);
     console.log("medicines table created or exists.");
 
+    // Create users table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        role TEXT NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        passkey TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log("users table created or exists.");
+
     // Create ledger_events table
     await client.query(`
       CREATE TABLE IF NOT EXISTS ledger_events (
@@ -44,14 +57,17 @@ async function initDb() {
     // First enable RLS
     await client.query(`ALTER TABLE medicines ENABLE ROW LEVEL SECURITY;`);
     await client.query(`ALTER TABLE ledger_events ENABLE ROW LEVEL SECURITY;`);
+    await client.query(`ALTER TABLE users ENABLE ROW LEVEL SECURITY;`);
 
     // Drop existing policies if they exist (ignore errors)
     await client.query(`DROP POLICY IF EXISTS "Allow public read-write for medicines" ON medicines;`).catch(() => {});
     await client.query(`DROP POLICY IF EXISTS "Allow public read-write for ledger_events" ON ledger_events;`).catch(() => {});
+    await client.query(`DROP POLICY IF EXISTS "Allow public read-write for users" ON users;`).catch(() => {});
 
     // Create policies to allow public access (since there is no auth yet, anon user needs access)
     await client.query(`CREATE POLICY "Allow public read-write for medicines" ON medicines FOR ALL USING (true) WITH CHECK (true);`);
     await client.query(`CREATE POLICY "Allow public read-write for ledger_events" ON ledger_events FOR ALL USING (true) WITH CHECK (true);`);
+    await client.query(`CREATE POLICY "Allow public read-write for users" ON users FOR ALL USING (true) WITH CHECK (true);`);
     console.log("RLS policies created for public access.");
 
   } catch (err) {
