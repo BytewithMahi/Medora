@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Factory, Truck, Store, User as UserIcon, ChevronLeft, ShieldCheck, Mail, Lock, Fingerprint, Activity } from 'lucide-react';
 
+
 interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
     initialMode: 'login' | 'register';
+    onLogin?: (role: Role) => void;
 }
 
 type Role = 'Manufacturer' | 'Distributor' | 'Retailer' | 'Customer' | null;
@@ -17,7 +19,7 @@ const roles = [
     { id: 'Customer', icon: UserIcon, color: 'text-emerald-400', shadow: 'hover:shadow-[0_0_30px_rgba(52,211,153,0.4)]', bg: 'bg-emerald-400/10' },
 ];
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onLogin }) => {
     const [currentMode, setCurrentMode] = useState<'login' | 'register'>(initialMode);
     const [selectedRole, setSelectedRole] = useState<Role>(null);
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -295,7 +297,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode }) =
                                             </div>
                                         )}
 
-                                        <button className="w-full relative group overflow-hidden rounded-xl bg-white text-black font-bold py-4 mt-4 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]">
+                                        <button
+                                            onClick={() => {
+                                                if (onLogin && selectedRole) onLogin(selectedRole);
+                                                onClose();
+                                            }}
+                                            className="w-full relative group overflow-hidden rounded-xl bg-white text-black font-bold py-4 mt-4 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]"
+                                        >
                                             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-purple-500/20 translate-y-full group-hover:translate-y-0 transition-transform ease-out" />
                                             <span className="relative z-10 flex items-center justify-center gap-2">
                                                 {currentMode === 'login' ? (
