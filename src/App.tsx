@@ -51,7 +51,7 @@ function App() {
               onClick={() => setActiveRole(null)}
               className="px-5 py-2 md:px-6 md:py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-full backdrop-blur-md transition-all hover:border-white/20 hover:scale-105"
             >
-              Log Out
+              {activeRole === 'Customer' ? 'Home' : 'Log Out'}
             </button>
           ) : (
             <>
@@ -77,7 +77,7 @@ function App() {
       {!activeRole ? (
         <div className="relative z-10 w-full overflow-y-auto h-screen snap-y snap-mandatory scroll-smooth">
           <div className="snap-start min-h-screen">
-            <Hero />
+            <Hero onCheckBatch={() => setActiveRole('Customer')} />
           </div>
           <div className="snap-start min-h-screen">
             <AboutUs />

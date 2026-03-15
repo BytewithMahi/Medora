@@ -17,7 +17,6 @@ const roles = [
     { id: 'Manufacturer', icon: Factory, color: 'text-cyan-400', shadow: 'hover:shadow-[0_0_30px_rgba(34,211,238,0.4)]', bg: 'bg-cyan-400/10' },
     { id: 'Distributor', icon: Truck, color: 'text-purple-400', shadow: 'hover:shadow-[0_0_30px_rgba(192,132,252,0.4)]', bg: 'bg-purple-400/10' },
     { id: 'Retailer', icon: Store, color: 'text-blue-400', shadow: 'hover:shadow-[0_0_30px_rgba(96,165,250,0.4)]', bg: 'bg-blue-400/10' },
-    { id: 'Customer', icon: UserIcon, color: 'text-emerald-400', shadow: 'hover:shadow-[0_0_30px_rgba(52,211,153,0.4)]', bg: 'bg-emerald-400/10' },
 ];
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onLogin }) => {
@@ -146,7 +145,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onL
                                 </div>
 
                                 {/* Role Cards Grid */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-6xl">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-5xl">
                                     {roles.map((role, idx) => {
                                         const Icon = role.icon;
                                         return (
@@ -169,7 +168,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode, onL
                                                     {role.id === 'Manufacturer' && 'Register medicine batches & generate hashes.'}
                                                     {role.id === 'Distributor' && 'Log logistics checkpoints & handling data.'}
                                                     {role.id === 'Retailer' && 'Verify authentic inventory & manage stock.'}
-                                                    {role.id === 'Customer' && 'Scan & verify medicine authenticity.'}
                                                 </p>
 
                                                 {/* Hover Glowing Border Bottom */}
